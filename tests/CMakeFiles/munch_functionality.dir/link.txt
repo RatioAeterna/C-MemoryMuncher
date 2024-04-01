@@ -1,0 +1,1 @@
+/home/jason/.nix-profile/bin/cc  -w CMakeFiles/munch_functionality.dir/munch_functionality.c.o -o munch_functionality  ../libMemoryMuncher.a 

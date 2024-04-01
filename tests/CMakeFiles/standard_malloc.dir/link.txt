@@ -1,0 +1,1 @@
+/home/jason/.nix-profile/bin/cc  -w CMakeFiles/standard_malloc.dir/standard_malloc.c.o -o standard_malloc 

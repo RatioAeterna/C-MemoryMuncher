@@ -1,0 +1,4 @@
+/home/jason/projects/C-MemoryMuncher/tests/CMakeFiles/standard_malloc.dir
+/home/jason/projects/C-MemoryMuncher/tests/CMakeFiles/munch_functionality.dir
+/home/jason/projects/C-MemoryMuncher/tests/CMakeFiles/edit_cache.dir
+/home/jason/projects/C-MemoryMuncher/tests/CMakeFiles/rebuild_cache.dir
