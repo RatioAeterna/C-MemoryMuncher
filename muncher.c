@@ -2,7 +2,9 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
+#include <string.h>
 #include <pthread.h>
+#include <stdlib.h>
 
 #include "muncher.h"
 #include <unistd.h>
@@ -10,8 +12,10 @@
 
 typedef struct header {
     unsigned int    size;
+    unsigned int ref_count;
     struct header   *next;
 } header_t;
+
 
 static header_t base;           /* Zero sized block to get us started. */
 static header_t *freep = &base; /* Points to first free block of memory. */
@@ -36,6 +40,88 @@ int get_num_threads(void) {
     }
     return num_threads;
 }
+
+
+typedef struct RegisterSnapshot {
+    uintptr_t rax, rbx, rcx, rdx, rsi, rdi, rbp;
+    uintptr_t r8, r9, r10, r11, r12, r13, r14, r15;
+} RegisterSnapshot;
+
+
+static RegisterSnapshot *regs = NULL;
+
+// saves the state of the general-purpose regs for marking later.
+void capture_registers() {
+    asm volatile(
+        "mov %%rax, %0\n"
+        "mov %%rbx, %1\n"
+        "mov %%rcx, %2\n"
+        "mov %%rdx, %3\n"
+        "mov %%rsi, %4\n"
+        "mov %%rdi, %5\n"
+        "mov %%rbp, %6\n"
+        "mov %%r8, %7\n"
+        "mov %%r9, %8\n"
+        "mov %%r10, %9\n"
+        "mov %%r11, %10\n"
+        "mov %%r12, %11\n"
+        "mov %%r13, %12\n"
+        "mov %%r14, %13\n"
+        "mov %%r15, %14\n"
+        : "=m"(regs->rax), "=m"(regs->rbx), "=m"(regs->rcx), "=m"(regs->rdx),
+          "=m"(regs->rsi), "=m"(regs->rdi), "=m"(regs->rbp), "=m"(regs->r8),
+          "=m"(regs->r9), "=m"(regs->r10), "=m"(regs->r11), "=m"(regs->r12),
+          "=m"(regs->r13), "=m"(regs->r14), "=m"(regs->r15)
+        :
+        : "memory"  // Clobber memory to prevent the compiler from reordering memory access across this point
+    );
+}
+
+// cycle through allocated blocks to see if there are any references in our register snapshot.
+void mark_register_roots() {
+    uintptr_t* reg_ptr = (uintptr_t*)snapshot;
+    size_t num_registers = sizeof(RegisterSnapshot) / sizeof(uintptr_t);
+
+    for (size_t i = 0; i < num_registers; i++) {
+        uintptr_t reg_value = reg_ptr[i];  // Dereference to get the register value
+
+        header_t* bp = usedp;
+        do {
+            if ((uintptr_t)(bp + 1) <= reg_value && 
+                (uintptr_t)(bp + 1) + bp->size > reg_value) {
+                bp->next = (header_t*)((uintptr_t)bp->next | 1);  // Mark the block as reached
+                break;
+            }
+        } while ((bp = UNTAG(bp->next)) != usedp);
+    }
+}
+
+/*
+typedef struct ShadowStackEntry {
+    header_t *ptr;  // Pointer to the heap-allocated object
+    struct ShadowStackEntry *next;  // Next entry in the stack
+} ShadowStackEntry;
+
+typedef struct {
+    ShadowStackEntry *top;  // Top of the shadow stack
+} ShadowStack;
+
+ShadowStack shadowStack = {NULL};
+
+
+void shadow_stack_push(ShadowStack *stack, void *ptr) {
+    ShadowStackEntry *entry = (ShadowStackEntry *)malloc(sizeof(ShadowStackEntry));
+    if (entry == NULL) {
+        // Handle memory allocation failure
+        return;
+    }
+    entry->ptr = ptr;
+    entry->next = stack->top;
+    stack->top = entry;
+}
+
+*/
+
 
 
 
@@ -157,12 +243,15 @@ void* munch_alloc(size_t size) {
     }
 }
 
-void muncher_endgame(void) {
+
+void muncher_cleanup(void) {
 
 
 
 
+    free(regs);
 }
+
 
 
 
@@ -184,7 +273,7 @@ void muncher_init(void) {
         exit(1);
     }
 
-    atexit(muncher_endgame); // specify that we want to call 'muncher_endgame()' right before program exit to clean up
+    atexit(muncher_cleanup); // specify that we want to call 'muncher_cleanup()' right before program exit to clean up
 
 
     statfp = fopen("/proc/self/stat", "r");
@@ -199,6 +288,9 @@ void muncher_init(void) {
     usedp = NULL;
     base.next = freep = &base;
     base.size = 0;
+
+
+    regs = malloc(sizeof(RegisterSnapshot));
 }
 
 
@@ -230,13 +322,7 @@ static void scan_heap(void) {
 }
 
 
-
-
-/*
- * Mark blocks of memory in use and free the ones not in use.
- */
-void muncher_collect(void) {
-    header_t *p, *prevp, *tp;
+void mark(void) {
     uintptr_t stack_top;
     extern char end, etext; /* Provided by the linker. */
 
@@ -252,6 +338,18 @@ void muncher_collect(void) {
 
     /* Mark from the heap. */
     scan_heap();
+
+    /* We want to get a snapshot of the register values at this particular moment in time,
+     * so we can check for references */
+    capture_registers()
+
+    /* Mark from registers. */
+    mark_register_roots();
+
+}
+
+void sweep(void) {
+    header_t *p, *prevp, *tp;
 
     /* And now we collect! */
     for (prevp = usedp, p = UNTAG(usedp->next);; prevp = p, p = UNTAG(p->next)) {
@@ -280,4 +378,14 @@ void muncher_collect(void) {
         if (p == usedp)
             break;
     }
+}
+
+
+
+/*
+ * Mark blocks of memory in use and free the ones not in use.
+ */
+void muncher_collect(void) {
+    mark();
+    sweep();
 }
