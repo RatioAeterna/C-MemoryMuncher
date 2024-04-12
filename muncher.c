@@ -7,8 +7,11 @@
 #include <stdlib.h>
 
 #include "muncher.h"
+#include "barrier.h"
 #include <unistd.h>
 
+#define UNTAG(p) (((uintptr_t) (p)) & 0xfffffffc)
+#define MIN_ALLOC_SIZE 4096 /* We allocate blocks in page sized chunks. */
 
 typedef struct header {
     unsigned int    size;
@@ -29,6 +32,8 @@ static size_t total_memory = 8ULL * 1024 * 1024 * 1024;  // 8GB
 static int num_threads = 0; // set at runtime 
 static pthread_t *threads = NULL;
 
+static Barrier *barrier;
+
 
 int optimal_num_threads() {
     return sysconf(_SC_NPROCESSORS_ONLN);  // number of cores. Simple heuristic: one thread per core
@@ -43,7 +48,7 @@ int get_num_threads(void) {
 
 
 typedef struct RegisterSnapshot {
-    uintptr_t rax, rbx, rcx, rdx, rsi, rdi, rbp;
+    uintptr_t rax, rbx, rcx, rdx, rsi, rdi;
     uintptr_t r8, r9, r10, r11, r12, r13, r14, r15;
 } RegisterSnapshot;
 
@@ -51,35 +56,46 @@ typedef struct RegisterSnapshot {
 static RegisterSnapshot *regs = NULL;
 
 // saves the state of the general-purpose regs for marking later.
+
+// NOTE: we don't capture rbp since it seems to cause some bugs, and also because
+// you would just never find a reference to a HEAP ADDRESS in the stack base pointer... tsk tsk
 void capture_registers() {
     asm volatile(
-        "mov %%rax, %0\n"
-        "mov %%rbx, %1\n"
-        "mov %%rcx, %2\n"
-        "mov %%rdx, %3\n"
-        "mov %%rsi, %4\n"
-        "mov %%rdi, %5\n"
-        "mov %%rbp, %6\n"
-        "mov %%r8, %7\n"
-        "mov %%r9, %8\n"
-        "mov %%r10, %9\n"
-        "mov %%r11, %10\n"
-        "mov %%r12, %11\n"
-        "mov %%r13, %12\n"
-        "mov %%r14, %13\n"
-        "mov %%r15, %14\n"
-        : "=m"(regs->rax), "=m"(regs->rbx), "=m"(regs->rcx), "=m"(regs->rdx),
-          "=m"(regs->rsi), "=m"(regs->rdi), "=m"(regs->rbp), "=m"(regs->r8),
-          "=m"(regs->r9), "=m"(regs->r10), "=m"(regs->r11), "=m"(regs->r12),
-          "=m"(regs->r13), "=m"(regs->r14), "=m"(regs->r15)
-        :
-        : "memory"  // Clobber memory to prevent the compiler from reordering memory access across this point
-    );
+    "mov %%rax, %0\n"
+    "mov %%rbx, %1\n"
+    "mov %%rcx, %2\n"
+    "mov %%rdx, %3\n"
+    "mov %%rsi, %4\n"
+    "mov %%rdi, %5\n"
+    "mov %%r8, %6\n"
+    "mov %%r9, %7\n"
+    "mov %%r10, %8\n"
+    "mov %%r11, %9\n"
+    "mov %%r12, %10\n"
+    "mov %%r13, %11\n"
+    "mov %%r14, %12\n"
+    "mov %%r15, %13\n"
+    : "=m"(regs->rax), "=m"(regs->rbx), "=m"(regs->rcx), "=m"(regs->rdx),
+      "=m"(regs->rsi), "=m"(regs->rdi), "=m"(regs->r8),
+      "=m"(regs->r9), "=m"(regs->r10), "=m"(regs->r11), "=m"(regs->r12),
+      "=m"(regs->r13), "=m"(regs->r14), "=m"(regs->r15)
+    :
+    : "memory"  // Clobber memory to prevent the compiler from reordering memory access across this point
+);
+
+
 }
+
+
+
+
+
+
+
 
 // cycle through allocated blocks to see if there are any references in our register snapshot.
 void mark_register_roots() {
-    uintptr_t* reg_ptr = (uintptr_t*)snapshot;
+    uintptr_t* reg_ptr = (uintptr_t*)regs;
     size_t num_registers = sizeof(RegisterSnapshot) / sizeof(uintptr_t);
 
     for (size_t i = 0; i < num_registers; i++) {
@@ -124,6 +140,39 @@ void shadow_stack_push(ShadowStack *stack, void *ptr) {
 
 
 
+// TODO we want to eventually switch from using 'sbrk' allocated memory to an mmap-based approach like this
+// to give us direct control over page flags.. for heap snapshotting.
+/*
+void* allocate_heap(size_t size) {
+    void* heap = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (heap == MAP_FAILED) {
+        perror("mmap");
+        return NULL;
+    }
+    return heap;
+}
+
+
+
+
+
+int prepare_cow_snapshot(void* heap, size_t size) {
+    if (mprotect(heap, size, PROT_READ) == -1) {
+        perror("mprotect");
+        return -1;
+    }
+    return 0;
+}
+
+int restore_heap_write(void* heap, size_t size) {
+    if (mprotect(heap, size, PROT_READ | PROT_WRITE) == -1) {
+        perror("mprotect");
+        return -1;
+    }
+    return 0;
+}
+*/
+
 
 /*
  * Scan the free list and look for a place to put the block. Basically, we're 
@@ -151,8 +200,6 @@ static void add_to_free_list(header_t *bp) {
     freep = p;
 }
 
-#define MIN_ALLOC_SIZE 4096 /* We allocate blocks in page sized chunks. */
-
 /*
  * Request more memory from the kernel.
  */
@@ -172,7 +219,6 @@ static header_t* morecore(size_t num_units) {
     return freep;
 }
 
-#define UNTAG(p) (((uintptr_t) (p)) & 0xfffffffc)
 
 /*
  * Scan a region of memory and mark any items in the used list appropriately.
@@ -245,10 +291,6 @@ void* munch_alloc(size_t size) {
 
 
 void muncher_cleanup(void) {
-
-
-
-
     free(regs);
 }
 
@@ -266,6 +308,10 @@ void muncher_init(void) {
         return;
 
     initted = 1;
+
+    // initialize memory barrier
+    //barrier_init(barrier);
+
     get_num_threads();
     // malloc all of our execution threads..
     threads = (pthread_t *)malloc(num_threads * sizeof(pthread_t));
@@ -332,19 +378,31 @@ void mark(void) {
     /* Scan the BSS and initialized data segments. */
     scan_region(&etext, &end);
 
+    //printf("scanned bss\n");
+    //fflush(stdout);
+
     /* Scan the stack. */
     asm volatile ("movq %%rbp, %0" : "=r" (stack_top));
     scan_region(stack_top, stack_bottom);
 
+    //printf("scanned stack\n");
+    //fflush(stdout);
+
     /* Mark from the heap. */
-    scan_heap();
+    //scan_heap();
+
+    //printf("scanned heap\n");
+    //fflush(stdout);
 
     /* We want to get a snapshot of the register values at this particular moment in time,
      * so we can check for references */
-    capture_registers()
+    capture_registers();
 
     /* Mark from registers. */
     mark_register_roots();
+
+    //printf("scanned regs\n");
+    //fflush(stdout);
 
 }
 
@@ -386,6 +444,10 @@ void sweep(void) {
  * Mark blocks of memory in use and free the ones not in use.
  */
 void muncher_collect(void) {
+    //printf("going to mark\n");
+    //fflush(stdout);
     mark();
+    //printf("going to sweep\n");
+    //fflush(stdout);
     sweep();
 }

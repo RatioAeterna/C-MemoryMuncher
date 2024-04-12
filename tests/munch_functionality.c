@@ -26,15 +26,18 @@ char* read_vm_data() {
 
 int main() {
 
-    const int iterations = 500;
+    const int iterations = 100000;
     const size_t block_size = 1024; // 1 KB
     
     read_vm_data();
 
     muncher_init(); // initialize the gc
     for(int i = 0; i < iterations; ++i) {
-	//printf("i: %d\n", i);
+	printf("i: %d\n", i);
+	fflush(stdout);
 	char* addr = (char*)munch_alloc(block_size);
+	printf("munch alloc'd\n");
+	fflush(stdout);
 	addr[0] = 'm';
 	addr[1] = 'u';
 	addr[2] = 'n';
