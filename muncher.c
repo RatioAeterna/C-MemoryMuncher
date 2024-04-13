@@ -5,6 +5,8 @@
 #include <string.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
 #include "muncher.h"
 #include "barrier.h"
@@ -152,26 +154,57 @@ void* allocate_heap(size_t size) {
     return heap;
 }
 
-
-
-
-
-int prepare_cow_snapshot(void* heap, size_t size) {
-    if (mprotect(heap, size, PROT_READ) == -1) {
-        perror("mprotect");
-        return -1;
-    }
-    return 0;
-}
-
-int restore_heap_write(void* heap, size_t size) {
-    if (mprotect(heap, size, PROT_READ | PROT_WRITE) == -1) {
-        perror("mprotect");
-        return -1;
-    }
-    return 0;
-}
 */
+
+
+// this should disable write permissions on EVERY page, so we need to be smart about how we do this
+int prepare_cow_snapshot() {
+    header_t *temp = freep;
+    while (temp != NULL) {
+	if (mprotect(temp, sizeof(header_t) + temp->size, PROT_READ) == -1) {
+	    perror("mprotect");
+	    return -1;
+	}
+	temp = temp->next;
+    }
+
+    header_t *p = usedp;
+    if (p != NULL) { // Ensure there's at least one element in the list
+	do {
+	    if (mprotect(p, sizeof(header_t) + p->size, PROT_READ) == -1) {
+		perror("mprotect");
+		return -1;
+	    }
+	    p = p->next;
+	} while (p != usedp);
+    }
+    return 0;
+}
+
+
+// basically just enable write permissions for every single block to resume normal use
+int restore_heap_write() {
+    header_t *temp = freep;
+    while (temp != NULL) { // TODO does 'size' actually have bytes, or is it in 'units'?
+	if (mprotect(temp, sizeof(header_t) + temp->size, PROT_READ | PROT_WRITE) == -1) {
+	    perror("mprotect");
+	    return -1;
+	}
+	temp = temp->next;
+    }
+
+    header_t *p = usedp;
+    if (p != NULL) { // Ensure there's at least one element in the list
+	do {
+	    if (mprotect(p, sizeof(header_t) + p->size, PROT_READ | PROT_WRITE) == -1) {
+		perror("mprotect");
+		return -1;
+	    }
+	    p = p->next;
+	} while (p != usedp);
+    }
+    return 0;
+}
 
 
 /*
@@ -204,18 +237,19 @@ static void add_to_free_list(header_t *bp) {
  * Request more memory from the kernel.
  */
 static header_t* morecore(size_t num_units) {
-    void *vp;
-    header_t *up;
+    size_t pagesize = getpagesize();
+    size_t required_size = num_units * sizeof(header_t);
+    // Align required size to the next page boundary
+    size_t total_size = (required_size + pagesize - 1) & ~(pagesize - 1);
 
-    if (num_units > MIN_ALLOC_SIZE)
-        num_units = MIN_ALLOC_SIZE / sizeof(header_t);
-
-    if ((vp = sbrk(num_units * sizeof(header_t))) == (void *) -1)
+    void *vp = mmap(NULL, total_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (vp == MAP_FAILED)
         return NULL;
 
-    up = (header_t *) vp;
-    up->size = num_units;
-    add_to_free_list (up);
+    header_t *up = (header_t *) vp;
+    up->size = total_size / sizeof(header_t);  // Convert total size back to units
+
+    add_to_free_list(up);
     return freep;
 }
 
@@ -252,6 +286,7 @@ void* munch_alloc(size_t size) {
 	muncher_collect();
     }
     */
+    
 
     size_t num_units;
     header_t *p, *prevp;
@@ -389,7 +424,7 @@ void mark(void) {
     //fflush(stdout);
 
     /* Mark from the heap. */
-    //scan_heap();
+    scan_heap();
 
     //printf("scanned heap\n");
     //fflush(stdout);
@@ -444,10 +479,12 @@ void sweep(void) {
  * Mark blocks of memory in use and free the ones not in use.
  */
 void muncher_collect(void) {
+    //prepare_cow_snapshot();
     //printf("going to mark\n");
     //fflush(stdout);
     mark();
     //printf("going to sweep\n");
     //fflush(stdout);
     sweep();
+    //restore_heap_write();
 }
