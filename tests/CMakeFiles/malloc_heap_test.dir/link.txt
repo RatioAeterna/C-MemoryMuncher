@@ -1,0 +1,1 @@
+/home/jason/.nix-profile/bin/cc  -w -g CMakeFiles/malloc_heap_test.dir/malloc_heap_test.c.o -o malloc_heap_test 

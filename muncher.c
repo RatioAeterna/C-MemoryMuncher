@@ -17,8 +17,10 @@
 
 typedef struct header {
     unsigned int    size;
-    unsigned int ref_count;
+    unsigned int    original_size;
+    //unsigned int ref_count;
     struct header   *next;
+    uintptr_t mmap_addr;
 } header_t;
 
 
@@ -28,6 +30,7 @@ static header_t *usedp;         /* Points to first used block of memory. */
 
 static uintptr_t stack_bottom;
 
+static int num_mmaps = 0;
 
 static size_t used_memory = 0;
 static size_t total_memory = 8ULL * 1024 * 1024 * 1024;  // 8GB
@@ -159,19 +162,28 @@ void* allocate_heap(size_t size) {
 
 // this should disable write permissions on EVERY page, so we need to be smart about how we do this
 int prepare_cow_snapshot() {
+    size_t pagesize = getpagesize();
     header_t *temp = freep;
+    /*
     while (temp != NULL) {
-	if (mprotect(temp, sizeof(header_t) + temp->size, PROT_READ) == -1) {
+	printf("HERE %d\n", temp->mmap_addr);
+	fflush(stdout);
+	size_t aligned_size = (sizeof(header_t) + temp->original_size + pagesize - 1) & ~(pagesize - 1);
+	if (mprotect(temp->mmap_addr, aligned_size, PROT_READ) == -1) {
 	    perror("mprotect");
 	    return -1;
 	}
 	temp = temp->next;
     }
+    */
 
     header_t *p = usedp;
     if (p != NULL) { // Ensure there's at least one element in the list
 	do {
-	    if (mprotect(p, sizeof(header_t) + p->size, PROT_READ) == -1) {
+	    printf("HERE %d\n", p->mmap_addr);
+	    fflush(stdout);
+            size_t aligned_size = (sizeof(header_t) + p->original_size + pagesize - 1) & ~(pagesize - 1);
+	    if (mprotect(p->mmap_addr, aligned_size, PROT_READ) == -1) {
 		perror("mprotect");
 		return -1;
 	    }
@@ -242,17 +254,27 @@ static header_t* morecore(size_t num_units) {
     // Align required size to the next page boundary
     size_t total_size = (required_size + pagesize - 1) & ~(pagesize - 1);
 
-    void *vp = mmap(NULL, total_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (vp == MAP_FAILED)
+    void *vp;
+    if (posix_memalign(&vp, pagesize, total_size) != 0) {
+	printf("misalignment\n");
+	fflush(stdout);
         return NULL;
-
-    header_t *up = (header_t *) vp;
-    up->size = total_size / sizeof(header_t);  // Convert total size back to units
-
+    }
+    if (mmap(vp, total_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0) == MAP_FAILED) {
+	printf("map failed\n");
+	fflush(stdout);
+        return NULL;
+    }
+    num_mmaps += 1; // increment this for debugging purposes
+    header_t *up = (header_t*) vp;
+    up->size = total_size / sizeof(header_t); // Convert total size back to units
+    up->mmap_addr = vp;
+    printf("mmap addr original: %d\n", up->mmap_addr);
+    fflush(stdout);
+    up->original_size = total_size / sizeof(header_t);
     add_to_free_list(up);
     return freep;
 }
-
 
 /*
  * Scan a region of memory and mark any items in the used list appropriately.
@@ -302,16 +324,23 @@ void* munch_alloc(size_t size) {
                 p->size -= num_units;
                 p += p->size;
                 p->size = num_units;
+		p->mmap_addr = prevp->mmap_addr;
+		p->original_size = prevp->original_size;
             }
 
             freep = prevp;
 
             /* Add to p to the used list. */
-            if (usedp == NULL)  
+            if (usedp == NULL) {
                 usedp = p->next = p;
+		usedp->mmap_addr = p->mmap_addr;
+		usedp->original_size = p->original_size;
+	    }
             else {
                 p->next = usedp->next;
                 usedp->next = p;
+		p->mmap_addr = usedp->mmap_addr; // Set the mmap_addr for the new used block
+		p->original_size = usedp->original_size; // Set the original_size for the new used block
             }
 	    used_memory += size; // We are now using 'size' extra bytes of memory in total
             return (void *) (p + 1);
@@ -326,6 +355,8 @@ void* munch_alloc(size_t size) {
 
 
 void muncher_cleanup(void) {
+    printf("number of allocs: %d\n", num_mmaps);
+    fflush(stdout);
     free(regs);
 }
 
@@ -407,21 +438,31 @@ void mark(void) {
     uintptr_t stack_top;
     extern char end, etext; /* Provided by the linker. */
 
+
     if (usedp == NULL)
         return;
+
+    /*
+    printf("in mark\n");
+    fflush(stdout);
+    */
 
     /* Scan the BSS and initialized data segments. */
     scan_region(&etext, &end);
 
-    //printf("scanned bss\n");
-    //fflush(stdout);
+    /*
+    printf("scanned bss\n");
+    fflush(stdout);
+    */
 
     /* Scan the stack. */
     asm volatile ("movq %%rbp, %0" : "=r" (stack_top));
     scan_region(stack_top, stack_bottom);
 
-    //printf("scanned stack\n");
-    //fflush(stdout);
+    /*
+    printf("scanned stack\n");
+    fflush(stdout);
+    */
 
     /* Mark from the heap. */
     scan_heap();
@@ -443,6 +484,7 @@ void mark(void) {
 
 void sweep(void) {
     header_t *p, *prevp, *tp;
+    size_t pagesize = getpagesize();
 
     /* And now we collect! */
     for (prevp = usedp, p = UNTAG(usedp->next);; prevp = p, p = UNTAG(p->next)) {
@@ -452,12 +494,28 @@ void sweep(void) {
              * The chunk hasn't been marked. Thus, it must be set free. 
              */
 	    // decrement total size usage
-	    //printf("sweeping block!, size: %d\n", p->size);
+	    printf("sweeping block!, size: %d\n", p->size);
+	    fflush(stdout);
+
 	    used_memory -= p->size;
 
             tp = p;
             p = UNTAG(p->next);
-            add_to_free_list(tp);
+
+	    // Unmap the freed chunk
+            size_t block_size = tp->size * sizeof(header_t);
+	    size_t aligned_size = (block_size + pagesize - 1) & ~(pagesize - 1);
+
+	    printf("aligned size: %d\n", aligned_size);
+	    fflush(stdout);
+	    printf("tp: %d\n", tp);
+	    fflush(stdout);
+
+            if (munmap(tp->mmap_addr, aligned_size) == -1) {
+                perror("munmap");
+                // Handle the error appropriately
+            }
+            //add_to_free_list(tp);
 
             if (usedp == tp) { 
                 usedp = NULL;
@@ -479,12 +537,14 @@ void sweep(void) {
  * Mark blocks of memory in use and free the ones not in use.
  */
 void muncher_collect(void) {
-    //prepare_cow_snapshot();
-    //printf("going to mark\n");
-    //fflush(stdout);
+    prepare_cow_snapshot();
+    /*
+    printf("going to mark\n");
+    fflush(stdout);
+    */
     mark();
-    //printf("going to sweep\n");
-    //fflush(stdout);
+    printf("going to sweep\n");
+    fflush(stdout);
     sweep();
-    //restore_heap_write();
+    restore_heap_write();
 }

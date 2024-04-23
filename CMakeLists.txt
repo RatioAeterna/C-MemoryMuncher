@@ -10,7 +10,7 @@ set(CMAKE_C_STANDARD_REQUIRED True)
 
 # Add compiler flags to suppress warnings
 if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -w")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -w -g")
 endif()
 
 # Add the library

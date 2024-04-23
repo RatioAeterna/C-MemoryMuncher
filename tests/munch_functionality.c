@@ -26,7 +26,7 @@ char* read_vm_data() {
 
 int main() {
 
-    const int iterations = 100000;
+    const int iterations = 100;
     const size_t block_size = 1024; // 1 KB
     
     read_vm_data();

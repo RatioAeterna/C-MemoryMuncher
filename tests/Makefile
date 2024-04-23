@@ -154,6 +154,58 @@ munch_functionality/fast:
 	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/munch_functionality.dir/build.make tests/CMakeFiles/munch_functionality.dir/build
 .PHONY : munch_functionality/fast
 
+# Convenience name for target.
+tests/CMakeFiles/munch_heap_test.dir/rule:
+	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/munch_heap_test.dir/rule
+.PHONY : tests/CMakeFiles/munch_heap_test.dir/rule
+
+# Convenience name for target.
+munch_heap_test: tests/CMakeFiles/munch_heap_test.dir/rule
+.PHONY : munch_heap_test
+
+# fast build rule for target.
+munch_heap_test/fast:
+	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/munch_heap_test.dir/build.make tests/CMakeFiles/munch_heap_test.dir/build
+.PHONY : munch_heap_test/fast
+
+# Convenience name for target.
+tests/CMakeFiles/malloc_heap_test.dir/rule:
+	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/malloc_heap_test.dir/rule
+.PHONY : tests/CMakeFiles/malloc_heap_test.dir/rule
+
+# Convenience name for target.
+malloc_heap_test: tests/CMakeFiles/malloc_heap_test.dir/rule
+.PHONY : malloc_heap_test
+
+# fast build rule for target.
+malloc_heap_test/fast:
+	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/malloc_heap_test.dir/build.make tests/CMakeFiles/malloc_heap_test.dir/build
+.PHONY : malloc_heap_test/fast
+
+malloc_heap_test.o: malloc_heap_test.c.o
+.PHONY : malloc_heap_test.o
+
+# target to build an object file
+malloc_heap_test.c.o:
+	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/malloc_heap_test.dir/build.make tests/CMakeFiles/malloc_heap_test.dir/malloc_heap_test.c.o
+.PHONY : malloc_heap_test.c.o
+
+malloc_heap_test.i: malloc_heap_test.c.i
+.PHONY : malloc_heap_test.i
+
+# target to preprocess a source file
+malloc_heap_test.c.i:
+	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/malloc_heap_test.dir/build.make tests/CMakeFiles/malloc_heap_test.dir/malloc_heap_test.c.i
+.PHONY : malloc_heap_test.c.i
+
+malloc_heap_test.s: malloc_heap_test.c.s
+.PHONY : malloc_heap_test.s
+
+# target to generate assembly for a file
+malloc_heap_test.c.s:
+	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/malloc_heap_test.dir/build.make tests/CMakeFiles/malloc_heap_test.dir/malloc_heap_test.c.s
+.PHONY : malloc_heap_test.c.s
+
 munch_functionality.o: munch_functionality.c.o
 .PHONY : munch_functionality.o
 
@@ -177,6 +229,30 @@ munch_functionality.s: munch_functionality.c.s
 munch_functionality.c.s:
 	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/munch_functionality.dir/build.make tests/CMakeFiles/munch_functionality.dir/munch_functionality.c.s
 .PHONY : munch_functionality.c.s
+
+munch_heap_test.o: munch_heap_test.c.o
+.PHONY : munch_heap_test.o
+
+# target to build an object file
+munch_heap_test.c.o:
+	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/munch_heap_test.dir/build.make tests/CMakeFiles/munch_heap_test.dir/munch_heap_test.c.o
+.PHONY : munch_heap_test.c.o
+
+munch_heap_test.i: munch_heap_test.c.i
+.PHONY : munch_heap_test.i
+
+# target to preprocess a source file
+munch_heap_test.c.i:
+	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/munch_heap_test.dir/build.make tests/CMakeFiles/munch_heap_test.dir/munch_heap_test.c.i
+.PHONY : munch_heap_test.c.i
+
+munch_heap_test.s: munch_heap_test.c.s
+.PHONY : munch_heap_test.s
+
+# target to generate assembly for a file
+munch_heap_test.c.s:
+	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/munch_heap_test.dir/build.make tests/CMakeFiles/munch_heap_test.dir/munch_heap_test.c.s
+.PHONY : munch_heap_test.c.s
 
 standard_malloc.o: standard_malloc.c.o
 .PHONY : standard_malloc.o
@@ -211,11 +287,19 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... test"
+	@echo "... malloc_heap_test"
 	@echo "... munch_functionality"
+	@echo "... munch_heap_test"
 	@echo "... standard_malloc"
+	@echo "... malloc_heap_test.o"
+	@echo "... malloc_heap_test.i"
+	@echo "... malloc_heap_test.s"
 	@echo "... munch_functionality.o"
 	@echo "... munch_functionality.i"
 	@echo "... munch_functionality.s"
+	@echo "... munch_heap_test.o"
+	@echo "... munch_heap_test.i"
+	@echo "... munch_heap_test.s"
 	@echo "... standard_malloc.o"
 	@echo "... standard_malloc.i"
 	@echo "... standard_malloc.s"

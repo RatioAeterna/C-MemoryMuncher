@@ -13,6 +13,8 @@ typedef struct Node {
 Node* create_list(int size) {
     Node* head = NULL;
     for (int i = 0; i < size; ++i) {
+	printf("i: %d\n", i);
+	fflush(stdout);
         Node* new_node = (Node*)munch_alloc(sizeof(Node));
         new_node->data = i;
         new_node->next = head;

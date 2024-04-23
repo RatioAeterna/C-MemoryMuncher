@@ -1,0 +1,1 @@
+/home/jason/.nix-profile/bin/cc  -w -g CMakeFiles/munch_heap_test.dir/munch_heap_test.c.o -o munch_heap_test  ../libMemoryMuncher.a 
