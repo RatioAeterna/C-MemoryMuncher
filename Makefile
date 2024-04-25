@@ -191,6 +191,19 @@ malloc_heap_test/fast:
 	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/malloc_heap_test.dir/build.make tests/CMakeFiles/malloc_heap_test.dir/build
 .PHONY : malloc_heap_test/fast
 
+#=============================================================================
+# Target rules for targets named cow_system_test
+
+# Build rule for target.
+cow_system_test: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 cow_system_test
+.PHONY : cow_system_test
+
+# fast build rule for target.
+cow_system_test/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/cow_system_test.dir/build.make tests/CMakeFiles/cow_system_test.dir/build
+.PHONY : cow_system_test/fast
+
 muncher.o: muncher.c.o
 .PHONY : muncher.o
 
@@ -225,6 +238,7 @@ help:
 	@echo "... rebuild_cache"
 	@echo "... test"
 	@echo "... MemoryMuncher"
+	@echo "... cow_system_test"
 	@echo "... malloc_heap_test"
 	@echo "... munch_functionality"
 	@echo "... munch_heap_test"

@@ -182,6 +182,44 @@ malloc_heap_test/fast:
 	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/malloc_heap_test.dir/build.make tests/CMakeFiles/malloc_heap_test.dir/build
 .PHONY : malloc_heap_test/fast
 
+# Convenience name for target.
+tests/CMakeFiles/cow_system_test.dir/rule:
+	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/cow_system_test.dir/rule
+.PHONY : tests/CMakeFiles/cow_system_test.dir/rule
+
+# Convenience name for target.
+cow_system_test: tests/CMakeFiles/cow_system_test.dir/rule
+.PHONY : cow_system_test
+
+# fast build rule for target.
+cow_system_test/fast:
+	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/cow_system_test.dir/build.make tests/CMakeFiles/cow_system_test.dir/build
+.PHONY : cow_system_test/fast
+
+cow_system_test.o: cow_system_test.c.o
+.PHONY : cow_system_test.o
+
+# target to build an object file
+cow_system_test.c.o:
+	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/cow_system_test.dir/build.make tests/CMakeFiles/cow_system_test.dir/cow_system_test.c.o
+.PHONY : cow_system_test.c.o
+
+cow_system_test.i: cow_system_test.c.i
+.PHONY : cow_system_test.i
+
+# target to preprocess a source file
+cow_system_test.c.i:
+	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/cow_system_test.dir/build.make tests/CMakeFiles/cow_system_test.dir/cow_system_test.c.i
+.PHONY : cow_system_test.c.i
+
+cow_system_test.s: cow_system_test.c.s
+.PHONY : cow_system_test.s
+
+# target to generate assembly for a file
+cow_system_test.c.s:
+	cd /home/jason/projects/C-MemoryMuncher && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/cow_system_test.dir/build.make tests/CMakeFiles/cow_system_test.dir/cow_system_test.c.s
+.PHONY : cow_system_test.c.s
+
 malloc_heap_test.o: malloc_heap_test.c.o
 .PHONY : malloc_heap_test.o
 
@@ -287,10 +325,14 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... test"
+	@echo "... cow_system_test"
 	@echo "... malloc_heap_test"
 	@echo "... munch_functionality"
 	@echo "... munch_heap_test"
 	@echo "... standard_malloc"
+	@echo "... cow_system_test.o"
+	@echo "... cow_system_test.i"
+	@echo "... cow_system_test.s"
 	@echo "... malloc_heap_test.o"
 	@echo "... malloc_heap_test.i"
 	@echo "... malloc_heap_test.s"

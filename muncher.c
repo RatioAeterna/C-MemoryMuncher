@@ -26,6 +26,7 @@ typedef struct header {
 
 static header_t base;           /* Zero sized block to get us started. */
 static header_t *freep = &base; /* Points to first free block of memory. */
+//static header_t *freep = NULL; /* Points to first free block of memory. */
 static header_t *usedp;         /* Points to first used block of memory. */
 
 static uintptr_t stack_bottom;
@@ -180,14 +181,34 @@ int prepare_cow_snapshot() {
     header_t *p = usedp;
     if (p != NULL) { // Ensure there's at least one element in the list
 	do {
-	    printf("HERE %d\n", p->mmap_addr);
+	    printf("top\n");
 	    fflush(stdout);
+	    header_t *next_page = p;
+	    while((p->mmap_addr < next_page) && (next_page <= (p->mmap_addr+pagesize)) && (next_page != usedp)) {
+		next_page = next_page->next;	
+	    }
+
+	    printf("HERE %d, %d\n", p->mmap_addr, p);
+	    fflush(stdout);
+	    // ignore all zero address blocks
+	    if(p->mmap_addr == 0) {
+		p = p->next;
+		printf("continuing \n");
+		fflush(stdout);
+		continue;
+	    }
             size_t aligned_size = (sizeof(header_t) + p->original_size + pagesize - 1) & ~(pagesize - 1);
+	    uintptr_t addr_to_protect = p->mmap_addr;
+	    p = next_page; // increment the page BEFORE we make it readonly...
 	    if (mprotect(p->mmap_addr, aligned_size, PROT_READ) == -1) {
 		perror("mprotect");
 		return -1;
 	    }
-	    p = p->next;
+	    printf("success\n");
+	    fflush(stdout);
+	    //return 0;
+	    //p = p->next;
+	    //p = next_page;
 	} while (p != usedp);
     }
     return 0;
@@ -225,7 +246,16 @@ int restore_heap_write() {
  */
 static void add_to_free_list(header_t *bp) {
     header_t *p;
-
+    /*
+    if (freep == NULL) {
+        // Empty free list, set freep to the new block
+        freep = bp;
+        bp->next = NULL;
+	printf("adding to free\n");
+	fflush(stdout);
+	return;
+    }
+    */
     for (p = freep; !(bp > p && bp < p->next); p = p->next)
         if (p >= p->next && (bp > p || bp < p->next))
             break;
@@ -318,25 +348,42 @@ void* munch_alloc(size_t size) {
 
     for (p = prevp->next;; prevp = p, p = p->next) {
         if (p->size >= num_units) { /* Big enough. */
-            if (p->size == num_units) /* Exact size. */
+            if (p->size == num_units) {/* Exact size. */
+		printf("this1\n");
+		fflush(stdout);
                 prevp->next = p->next;
+	    }
             else {
+		printf("this2 %d\n", p->mmap_addr);
+		printf("p val: %d\n", p);
+		fflush(stdout);
+		uintptr_t mmap_addr_copy = p->mmap_addr;
+		size_t original_size_copy = p->original_size;
                 p->size -= num_units;
                 p += p->size;
                 p->size = num_units;
-		p->mmap_addr = prevp->mmap_addr;
-		p->original_size = prevp->original_size;
+		//p->mmap_addr = prevp->mmap_addr;
+		//p->original_size = prevp->original_size;
+		p->mmap_addr = mmap_addr_copy;
+		p->original_size = original_size_copy;
+		printf("this2 AGAIN %d\n", p->mmap_addr);
+		printf("p val: %d\n", p);
+		fflush(stdout);
             }
 
-            freep = prevp;
+            //freep = prevp;
 
             /* Add to p to the used list. */
             if (usedp == NULL) {
                 usedp = p->next = p;
 		usedp->mmap_addr = p->mmap_addr;
 		usedp->original_size = p->original_size;
+		printf("this3... %d\n", usedp->mmap_addr);
+		fflush(stdout);
 	    }
             else {
+		printf("this4\n");
+		fflush(stdout);
                 p->next = usedp->next;
                 usedp->next = p;
 		p->mmap_addr = usedp->mmap_addr; // Set the mmap_addr for the new used block
@@ -347,6 +394,9 @@ void* munch_alloc(size_t size) {
         }
         if (p == freep) { /* Not enough memory. */
             p = morecore(num_units);
+	    printf("this5 %d, %d, %d\n", p->mmap_addr, p->next->mmap_addr, freep);
+	    printf("p val: %d, p->next: %d\n", p, p->next);
+	    fflush(stdout);
             if (p == NULL) /* Request for more memory failed. */
                 return NULL;
         }
@@ -399,6 +449,8 @@ void muncher_init(void) {
 
     usedp = NULL;
     base.next = freep = &base;
+    //freep = NULL;
+    base.next = &base;
     base.size = 0;
 
 
@@ -442,30 +494,24 @@ void mark(void) {
     if (usedp == NULL)
         return;
 
-    /*
     printf("in mark\n");
     fflush(stdout);
-    */
 
     /* Scan the BSS and initialized data segments. */
     scan_region(&etext, &end);
 
-    /*
     printf("scanned bss\n");
     fflush(stdout);
-    */
 
     /* Scan the stack. */
     asm volatile ("movq %%rbp, %0" : "=r" (stack_top));
     scan_region(stack_top, stack_bottom);
 
-    /*
     printf("scanned stack\n");
     fflush(stdout);
-    */
 
     /* Mark from the heap. */
-    scan_heap();
+    //scan_heap();
 
     //printf("scanned heap\n");
     //fflush(stdout);
@@ -538,10 +584,8 @@ void sweep(void) {
  */
 void muncher_collect(void) {
     prepare_cow_snapshot();
-    /*
     printf("going to mark\n");
     fflush(stdout);
-    */
     mark();
     printf("going to sweep\n");
     fflush(stdout);
