@@ -9,11 +9,13 @@
 #include <unistd.h>
 
 #include "muncher.h"
-#include "barrier.h"
 #include <unistd.h>
 
 #define UNTAG(p) (((uintptr_t) (p)) & 0xfffffffc)
 #define MIN_ALLOC_SIZE 4096 /* We allocate blocks in page sized chunks. */
+
+// NOTE: credit for skeleton code for basic mark and sweep to Matthew Plant (https://maplant.com/2020-04-25-Writing-a-Simple-Garbage-Collector-in-C.html)
+// A nontrivial amount of that original code has been changed/debugged in one way or another, several functions remain unchanged.
 
 typedef struct header {
     unsigned int    size;
@@ -117,49 +119,6 @@ void mark_register_roots() {
         } while ((bp = UNTAG(bp->next)) != usedp);
     }
 }
-
-/*
-typedef struct ShadowStackEntry {
-    header_t *ptr;  // Pointer to the heap-allocated object
-    struct ShadowStackEntry *next;  // Next entry in the stack
-} ShadowStackEntry;
-
-typedef struct {
-    ShadowStackEntry *top;  // Top of the shadow stack
-} ShadowStack;
-
-ShadowStack shadowStack = {NULL};
-
-
-void shadow_stack_push(ShadowStack *stack, void *ptr) {
-    ShadowStackEntry *entry = (ShadowStackEntry *)malloc(sizeof(ShadowStackEntry));
-    if (entry == NULL) {
-        // Handle memory allocation failure
-        return;
-    }
-    entry->ptr = ptr;
-    entry->next = stack->top;
-    stack->top = entry;
-}
-
-*/
-
-
-
-// TODO we want to eventually switch from using 'sbrk' allocated memory to an mmap-based approach like this
-// to give us direct control over page flags.. for heap snapshotting.
-/*
-void* allocate_heap(size_t size) {
-    void* heap = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (heap == MAP_FAILED) {
-        perror("mmap");
-        return NULL;
-    }
-    return heap;
-}
-
-*/
-
 
 // this should disable write permissions on EVERY page, so we need to be smart about how we do this
 int prepare_cow_snapshot() {
@@ -576,8 +535,6 @@ void sweep(void) {
             break;
     }
 }
-
-
 
 /*
  * Mark blocks of memory in use and free the ones not in use.

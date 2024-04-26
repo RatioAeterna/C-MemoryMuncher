@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 // simple sanity test to see if we're able to trigger copy-on-write on this system
+// NOTE: This particular test was mostly auto-generated just for the purpose of figuring out if my own system supports COW.
 int main() {
     // Get the system page size
     size_t pagesize = getpagesize();
